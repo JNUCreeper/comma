@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creeper - AI 그룹 목표 관리</title>
+    <!-- 폰트: Noto Sans KR -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <!-- 아이콘: FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 스타일: Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Noto Sans KR', 'sans-serif'] },
+                    colors: {
+                        primary: '#10b981', // Emerald 500
+                        primaryDark: '#059669', // Emerald 600
+                        primaryLight: '#d1fae5', // Emerald 100
+                        bgGray: '#f9fafb',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #e5e7eb; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        /* 모바일 앱 뷰 컨테이너 */
+        #app-container {
+            width: 100%; max-width: 400px; height: 100vh; max-height: 850px;
+            background-color: white; position: relative; overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        @media (min-width: 480px) { #app-container { height: 90vh; border-radius: 2rem; } }
+        
+        /* 스크롤바 숨기기 */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        
+        /* 애니메이션 */
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .slide-in-right { animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .pulse-slow { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .dynamic-hover { transition: all 0.2s ease; }
+        .dynamic-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.2); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(50px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .7; transform: scale(1.05); } }
+
+        /* 화면 전환 관리용 클래스 */
+        .screen { display: none; width: 100%; height: 100%; flex-direction: column; position: absolute; top: 0; left: 0; background: #f9fafb; z-index: 10; }
+        .screen.active { display: flex; z-index: 20; }
+        
+        /* 채팅 말풍선 꼬리 */
+        .chat-bubble-left { position: relative; }
+        .chat-bubble-left::before { content: ''; position: absolute; left: -6px; top: 12px; border-width: 6px 8px 6px 0; border-color: transparent white transparent transparent; border-style: solid; }
+        .chat-bubble-right { position: relative; }
+        .chat-bubble-right::before { content: ''; position: absolute; right: -6px; top: 12px; border-width: 6px 0 6px 8px; border-color: transparent transparent transparent #10b981; border-style: solid; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+
+    <!-- [Screen 1] 로그인 화면 -->
+    <div id="screen-login" class="screen active p-8 justify-center items-center bg-white">
+        <div class="text-center w-full fade-in">
+            <div class="w-20 h-20 bg-primaryLight rounded-full flex items-center justify-center mx-auto mb-6 pulse-slow">
+                <i class="fa-solid fa-leaf text-4xl text-primary"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">Creeper</h1>
+            <p class="text-sm text-gray-500 mb-10">AI 기반 그룹 목표 관리 서비스</p>
+            
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">이메일</label>
+                    <input type="email" value="jiwon@jnu.ac.kr" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">비밀번호</label>
+                    <input type="password" value="password123" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all">
+                </div>
+                <button onclick="navigate('screen-home')" class="w-full bg-primary hover:bg-primaryDark text-white font-bold rounded-xl py-3.5 mt-4 transition-colors dynamic-hover shadow-lg shadow-primary/30">
+                    로그인
+                </button>
+            </div>
+            
+            <p class="text-xs text-gray-400 mt-8">WE-MEET PROJECT 2026</p>
+        </div>
+    </div>
+
+    <!-- [Screen 2] 메인 홈 화면 -->
+    <div id="screen-home" class="screen bg-bgGray overflow-y-auto">
+        <!-- Header -->
+        <header class="px-6 pt-12 pb-4 bg-white shadow-sm flex justify-between items-center sticky top-0 z-30">
+            <div>
+                <h2 class="text-lg font-bold text-gray-800">안녕하세요, 박지원님! 👋</h2>
+                <p class="text-xs text-gray-500">오늘도 목표를 향해 달려볼까요?</p>
+            </div>
+            <button class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-primaryLight hover:text-primary transition-colors relative">
+                <i class="fa-regular fa-bell"></i>
+                <span class="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
+        </header>
+
+        <div class="p-6 space-y-6 slide-up">
+            <!-- 요약 카드 -->
+            <div class="bg-gradient-to-br from-primary to-primaryDark rounded-2xl p-5 text-white shadow-lg shadow-primary/30">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-sm font-medium text-primaryLight">나의 전체 달성률</span>
+                    <i class="fa-solid fa-chart-line text-primaryLight"></i>
+                </div>
+                <div class="text-3xl font-bold mb-2">68%</div>
+                <div class="w-full bg-black/20 rounded-full h-1.5 mb-2">
+                    <div class="bg-white h-1.5 rounded-full" style="width: 68%"></div>
+                </div>
+                <p class="text-xs text-primaryLight">지난주보다 12% 상승했어요!</p>
+            </div>
+
+            <!-- 그룹 리스트 -->
+            <div>
+                <div class="flex justify-between items-end mb-4">
+                    <h3 class="font-bold text-gray-800">참여 중인 그룹 <span class="text-primary text-sm ml-1">2</span></h3>
+                    <button class="text-xs text-primary font-medium hover:underline">+ 새 그룹</button>
+                </div>
+                
+                <div class="space-y-4">
+                    <!-- 활동 중인 그룹 -->
+                    <div onclick="navigate('screen-dashboard')" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer dynamic-hover relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-[10px] font-bold text-primary bg-primaryLight px-2 py-0.5 rounded-full mb-2 inline-block">진행중</span>
+                                <h4 class="font-bold text-gray-800">AI 혁신 융합 캡스톤</h4>
+                            </div>
+                            <div class="flex -space-x-2">
+                                <img src="https://placehold.co/30x30/10b981/ffffff?text=J" class="w-7 h-7 rounded-full border-2 border-white">
+                                <img src="https://placehold.co/30x30/3b82f6/ffffff?text=Y" class="w-7 h-7 rounded-full border-2 border-white">
+                                <img src="https://placehold.co/30x30/f59e0b/ffffff?text=+" class="w-7 h-7 rounded-full border-2 border-white">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-4 line-clamp-1">목표: AI 기반 목표 관리 서비스 프로토타입 완성</p>
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 bg-gray-100 rounded-full h-1.5">
+                                <div class="bg-primary h-1.5 rounded-full" style="width: 45%"></div>
+                            </div>
+                            <span class="text-xs font-bold text-primary">45%</span>
+                        </div>
+                    </div>
+
+                    <!-- 킥오프 대기 그룹 (클릭 시 킥오프 채팅으로 이동) -->
+                    <div onclick="navigate('screen-kickoff-chat')" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer dynamic-hover relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-amber-400"></div>
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-[10px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full mb-2 inline-block animate-pulse">킥오프 대기</span>
+                                <h4 class="font-bold text-gray-800">WE-MEET 해커톤 팀</h4>
+                            </div>
+                            <div class="flex -space-x-2">
+                                <img src="https://placehold.co/30x30/10b981/ffffff?text=J" class="w-7 h-7 rounded-full border-2 border-white">
+                                <img src="https://placehold.co/30x30/ec4899/ffffff?text=S" class="w-7 h-7 rounded-full border-2 border-white">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-3">팀원들과 목표 설정을 위한 킥오프 채팅을 시작하세요.</p>
+                        <button class="w-full bg-amber-50 text-amber-600 text-xs font-bold py-2 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200">
+                            킥오프 채팅방 입장하기 <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- [Screen 3] 킥오프 채팅 화면 -->
+    <div id="screen-kickoff-chat" class="screen flex flex-col bg-slate-50">
+        <!-- Header -->
+        <header class="px-4 py-4 bg-white shadow-sm flex items-center justify-between shrink-0">
+            <button onclick="navigate('screen-home')" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-700">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <div class="text-center">
+                <h2 class="text-sm font-bold text-gray-800">WE-MEET 킥오프 회의</h2>
+                <div class="text-[10px] text-red-500 font-bold flex items-center justify-center gap-1">
+                    <i class="fa-regular fa-clock"></i> 남은 시간 14:23
+                </div>
+            </div>
+            <button onclick="startAiAnalysis()" class="px-3 py-1.5 bg-gray-800 text-white text-xs font-bold rounded-lg hover:bg-black transition-colors">
+                종료/분석
+            </button>
+        </header>
+
+        <!-- Chat Area -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4 text-sm" id="chat-container">
+            <!-- Info Message -->
+            <div class="flex justify-center mb-4 fade-in">
+                <div class="bg-gray-200/60 text-gray-500 text-[10px] px-3 py-1 rounded-full text-center max-w-[80%]">
+                    킥오프 채팅이 시작되었습니다. 자유롭게 이번 프로젝트에서 달성하고 싶은 목표를 이야기해주세요! (AI가 대화를 분석합니다)
+                </div>
+            </div>
+            
+            <!-- Other User Msg -->
+            <div class="flex gap-2 slide-up" style="animation-delay: 0.1s;">
+                <img src="https://placehold.co/30x30/ec4899/ffffff?text=S" class="w-8 h-8 rounded-full shrink-0">
+                <div>
+                    <span class="text-[10px] text-gray-400 ml-1">세정</span>
+                    <div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm text-gray-700 chat-bubble-left text-sm max-w-[220px]">
+                        우리 이번 해커톤 주제 어떻게 잡을까요? 저는 AI를 실생활에 적용하는 거 해보고 싶어요.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other User Msg -->
+            <div class="flex gap-2 slide-up" style="animation-delay: 0.2s;">
+                <img src="https://placehold.co/30x30/3b82f6/ffffff?text=Y" class="w-8 h-8 rounded-full shrink-0">
+                <div>
+                    <span class="text-[10px] text-gray-400 ml-1">예원</span>
+                    <div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm text-gray-700 chat-bubble-left text-sm max-w-[220px]">
+                        저번에 기획했던 '목표 관리 자동화' 아이디어 좋지 않았나요? 채팅만 하면 AI가 다 분석해주는 거요!
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Msg -->
+            <div class="flex gap-2 justify-end slide-up" style="animation-delay: 0.3s;">
+                <div>
+                    <div class="bg-primary text-white p-3 rounded-2xl rounded-tr-none shadow-sm chat-bubble-right text-sm max-w-[220px]">
+                        오, 그거 좋네요! 우리가 직접 그 서비스를 만들어보는 걸 목표로 하죠. 기능 목록부터 빨리 정리해야겠네요.
+                    </div>
+                </div>
+            </div>
+            
+             <!-- Other User Msg -->
+             <div class="flex gap-2 slide-up" style="animation-delay: 0.4s;">
+                <img src="https://placehold.co/30x30/ec4899/ffffff?text=S" class="w-8 h-8 rounded-full shrink-0">
+                <div>
+                    <span class="text-[10px] text-gray-400 ml-1">세정</span>
+                    <div class="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm text-gray-700 chat-bubble-left text-sm max-w-[220px]">
+                        네! 그럼 최종 목표는 프로토타입 앱 완성으로 하고, 저는 UI 디자인 맡을게요.
+                    </div>
+                </div>
+            </div>
+            <!-- Empty space for scroll -->
+            <div class="h-4"></div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-3 bg-white border-t border-gray-100 flex gap-2 shrink-0">
+            <button class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-primary transition-colors bg-gray-50 rounded-full shrink-0">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+            <input type="text" placeholder="의견을 자유롭게 남겨주세요..." class="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-full px-4 py-2 text-sm transition-all outline-none">
+            <button class="w-10 h-10 flex items-center justify-center bg-primary text-white hover:bg-primaryDark transition-colors rounded-full shrink-0 shadow-md">
+                <i class="fa-solid fa-paper-plane text-sm"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- [Screen 4] AI 분석 로딩 화면 -->
+    <div id="screen-ai-loading" class="screen justify-center items-center bg-gradient-to-br from-gray-900 to-gray-800 text-white z-40">
+        <div class="text-center w-full px-8 fade-in">
+            <!-- 애니메이션 효과 -->
+            <div class="relative w-32 h-32 mx-auto mb-8 flex items-center justify-center">
+                <div class="absolute inset-0 border-4 border-primary/30 rounded-full animate-ping"></div>
+                <div class="absolute inset-2 border-4 border-primary/60 rounded-full animate-spin" style="animation-duration: 3s;"></div>
+                <div class="w-20 h-20 bg-gradient-to-tr from-primary to-emerald-300 rounded-full shadow-lg shadow-primary/50 flex items-center justify-center pulse-slow text-3xl z-10">
+                    <i class="fa-solid fa-brain text-white"></i>
+                </div>
+            </div>
+            <h2 class="text-xl font-bold mb-2">AI가 대화를 분석 중입니다</h2>
+            <p id="ai-loading-text" class="text-sm text-gray-400 h-5">그룹원들의 공통된 의견을 추출하고 있습니다...</p>
+            
+            <div class="w-48 h-1 bg-gray-700 rounded-full mx-auto mt-8 overflow-hidden">
+                <div class="h-full bg-primary rounded-full animate-[slideRight_2s_ease-in-out_infinite]" style="width: 50%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- [Screen 5] AI 목표 도출 결과 화면 -->
+    <div id="screen-ai-result" class="screen bg-bgGray overflow-y-auto z-40">
+        <header class="px-4 py-4 bg-transparent flex items-center justify-between sticky top-0 backdrop-blur-sm z-30">
+            <button onclick="navigate('screen-kickoff-chat')" class="w-8 h-8 flex items-center justify-center text-gray-600">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <span class="text-sm font-bold text-gray-800">AI 목표 도출 결과</span>
+            <div class="w-8"></div>
+        </header>
+
+        <div class="p-6 pb-24 slide-up">
+            <div class="bg-primaryLight text-primaryDark text-xs font-bold px-3 py-1 rounded-full inline-flex items-center gap-1 mb-4">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> AI Analysis Complete
+            </div>
+            
+            <h2 class="text-2xl font-bold text-gray-800 mb-2 leading-tight">킥오프 대화를 바탕으로<br>추천된 공동 목표입니다.</h2>
+            <p class="text-sm text-gray-500 mb-8">내용을 확인하고 팀의 최종 목표로 확정해 보세요.</p>
+
+            <!-- Main Goal Card -->
+            <div class="bg-white rounded-2xl p-6 shadow-lg shadow-gray-200/50 border border-gray-100 mb-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4"></div>
+                <h3 class="text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Main Goal</h3>
+                <h4 class="text-lg font-bold text-primary mb-4 pr-6">AI 기반 그룹 목표 관리 자동화 프로토타입 완성</h4>
+                
+                <div class="space-y-3 mt-4 pt-4 border-t border-gray-100">
+                    <h5 class="text-xs font-bold text-gray-700">도출된 세부 활동 내역</h5>
+                    
+                    <div class="flex gap-3 items-start bg-gray-50 p-3 rounded-xl">
+                        <div class="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold text-gray-600 shadow-sm shrink-0">1</div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-800 mb-0.5">기능 명세서 및 화면 설계서 작성</p>
+                            <p class="text-[10px] text-gray-500">추천 담당: 전원</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 items-start bg-gray-50 p-3 rounded-xl">
+                        <div class="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold text-gray-600 shadow-sm shrink-0">2</div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-800 mb-0.5">앱 UI 디자인 및 프로토타이핑</p>
+                            <p class="text-[10px] text-primary font-medium">추천 담당: 세정</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 items-start bg-gray-50 p-3 rounded-xl">
+                        <div class="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold text-gray-600 shadow-sm shrink-0">3</div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-800 mb-0.5">프론트엔드/백엔드 기본 환경 세팅</p>
+                            <p class="text-[10px] text-gray-500">담당자 미정 (클릭하여 할당)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit buttons -->
+            <div class="flex gap-2">
+                <button class="flex-1 bg-white border border-gray-200 text-gray-600 font-bold py-3.5 rounded-xl text-sm hover:bg-gray-50 transition-colors">
+                    목표 수정하기
+                </button>
+                <button onclick="navigate('screen-dashboard')" class="flex-[2] bg-primary text-white font-bold py-3.5 rounded-xl text-sm hover:bg-primaryDark transition-colors shadow-lg shadow-primary/30 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check"></i> 목표 확정하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [Screen 6] 그룹 대시보드 화면 -->
+    <div id="screen-dashboard" class="screen bg-bgGray overflow-y-auto">
+        <!-- Header -->
+        <header class="px-5 py-4 bg-white sticky top-0 z-30 shadow-sm flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <button onclick="navigate('screen-home')" class="text-gray-400 hover:text-gray-700">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 class="text-base font-bold text-gray-800">WE-MEET 해커톤 팀</h2>
+            </div>
+            <button class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-gear"></i></button>
+        </header>
+
+        <div class="p-5 space-y-6 slide-in-right">
+            <!-- Goal & Progress -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-sm font-bold text-gray-800">AI 기반 그룹 목표 관리 자동화 프로토타입 완성</h3>
+                    <div class="bg-gray-100 text-gray-500 text-[10px] px-2 py-1 rounded-md whitespace-nowrap ml-2">D-14</div>
+                </div>
+                
+                <div class="mt-6 flex items-center gap-4">
+                    <!-- Circular Progress -->
+                    <div class="relative w-16 h-16 shrink-0">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                            <path class="text-gray-100" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path class="text-primary" stroke-dasharray="10, 100" stroke-width="3" stroke="currentColor" fill="none" stroke-linecap="round" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-800">10%</div>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-xs text-gray-500 mb-1">그룹 전체 진행률</p>
+                        <p class="text-sm font-bold text-gray-800">시작이 반입니다! 화이팅 🔥</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Insight (피드백) -->
+            <div class="bg-gradient-to-r from-gray-800 to-gray-900 rounded-2xl p-4 text-white shadow-md relative overflow-hidden">
+                <i class="fa-solid fa-robot absolute -right-2 -bottom-4 text-6xl text-white/5"></i>
+                <div class="flex items-center gap-2 mb-2">
+                    <i class="fa-solid fa-sparkles text-amber-300 text-xs"></i>
+                    <span class="text-[10px] font-bold text-amber-300 tracking-wider">AI INSIGHT</span>
+                </div>
+                <p class="text-xs leading-relaxed text-gray-200">
+                    성공적으로 목표가 수립되었습니다. <br>
+                    첫 번째 활동인 <span class="text-white font-bold">'기능 명세서 작성'</span>을 시작해 보세요. 현재 일정상 내일까지 완료하는 것을 추천합니다.
+                </p>
+            </div>
+
+            <!-- To-Do List (활동 기록) -->
+            <div>
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-sm text-gray-800">세부 활동 목록</h3>
+                    <span class="text-xs text-gray-500">총 3개</span>
+                </div>
+                
+                <div class="space-y-3">
+                    <!-- Task 1 (My task) -->
+                    <label class="flex items-start gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm cursor-pointer dynamic-hover">
+                        <input type="checkbox" class="mt-0.5 w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary accent-primary">
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-800 select-none">기능 명세서 및 화면 설계서 작성</p>
+                            <div class="flex gap-2 mt-2">
+                                <span class="bg-primaryLight text-primary text-[9px] px-1.5 py-0.5 rounded font-bold">내 담당</span>
+                                <span class="bg-gray-100 text-gray-500 text-[9px] px-1.5 py-0.5 rounded">마감: 내일</span>
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Task 2 (Others) -->
+                    <label class="flex items-start gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm opacity-60">
+                        <input type="checkbox" disabled class="mt-0.5 w-4 h-4 rounded border-gray-300">
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-600 line-through">앱 UI 디자인 및 프로토타이핑</p>
+                            <div class="flex gap-2 mt-2 items-center">
+                                <img src="https://placehold.co/16x16/ec4899/ffffff?text=S" class="w-4 h-4 rounded-full">
+                                <span class="text-gray-400 text-[10px]">세정 진행 완료</span>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="h-10"></div> <!-- Bottom padding -->
+        </div>
+
+        <!-- FAB for quick action -->
+        <button class="absolute bottom-6 right-6 w-12 h-12 bg-primary text-white rounded-full shadow-lg shadow-primary/40 flex items-center justify-center text-xl hover:bg-primaryDark transition-all hover:scale-105 z-30">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+    </div>
+
+</div>
+
+<script>
+    // 화면 네비게이션 함수
+    function navigate(screenId) {
+        // 모든 스크린 숨기기
+        const screens = document.querySelectorAll('.screen');
+        screens.forEach(s => s.classList.remove('active'));
+        
+        // 대상 스크린 보이기
+        const target = document.getElementById(screenId);
+        if(target) {
+            target.classList.add('active');
+            
+            // 화면 진입 시 애니메이션 재시작을 위한 트릭
+            const animatedElements = target.querySelectorAll('.slide-up, .fade-in, .slide-in-right');
+            animatedElements.forEach(el => {
+                el.style.animation = 'none';
+                el.offsetHeight; /* trigger reflow */
+                el.style.animation = null;
+            });
+        }
+    }
+
+    // AI 분석 시뮬레이션 플로우
+    function startAiAnalysis() {
+        navigate('screen-ai-loading');
+        
+        const loadingTexts = [
+            "그룹원들의 공통된 의견을 추출하고 있습니다...",
+            "주요 키워드를 바탕으로 방향성을 설정합니다...",
+            "실현 가능한 구체적인 목표를 생성 중입니다...",
+            "세부 활동 내역을 정리하고 있습니다..."
+        ];
+        
+        let textIndex = 0;
+        const textElement = document.getElementById('ai-loading-text');
+        
+        // 텍스트 변경 인터벌 (1.2초마다)
+        const textInterval = setInterval(() => {
+            textIndex = (textIndex + 1) % loadingTexts.length;
+            textElement.style.opacity = 0;
+            setTimeout(() => {
+                textElement.innerText = loadingTexts[textIndex];
+                textElement.style.opacity = 1;
+            }, 200);
+        }, 1200);
+
+        // 4초 후 결과 화면으로 자동 전환
+        setTimeout(() => {
+            clearInterval(textInterval);
+            navigate('screen-ai-result');
+        }, 4500);
+    }
+</script>
+
+</body>
+</html>
